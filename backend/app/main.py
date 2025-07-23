@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 from app.api.routes import financial_data, insights, users
-from app.config import settings
+from .config import settings
 
 
 @asynccontextmanager
