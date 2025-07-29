@@ -1,96 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './DailyInsights.css';
 
 const DailyInsights = () => {
+  // 전체 인사이트 목록 상태 (기존 + 새로 생성)
   const [insights, setInsights] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [expandedPosts, setExpandedPosts] = useState(new Set());
-  const insightsPerPage = 5;
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState({ status: '', progress: 0, message: '' });
+  const [error, setError] = useState(null);
 
-  // 데모용 목업 데이터
-  const mockInsights = [
-    {
-      id: 1,
-      date: '2025-01-20',
-      headline: 'AI 기술 혁신 발표로 인한 기술주 랠리',
-      summary: '주요 기술 기업들이 AI 개발 혁신 발표 이후 오늘 큰 상승세를 보였습니다. 귀하의 포트폴리오에 있는 NVDA와 MSFT는 각각 3.2%와 2.8%의 강한 성과를 보였습니다.',
-      fullContent: '주요 기술 기업들이 AI 개발 혁신 발표 이후 오늘 큰 상승세를 보였습니다. 귀하의 포트폴리오에 있는 NVDA와 MSFT는 각각 3.2%와 2.8%의 강한 성과를 보였습니다. 시장 심리는 AI 관련 투자에 대해 여전히 강세를 유지하고 있습니다.\n\n특히 NVIDIA는 새로운 AI 칩셋 발표와 함께 클라우드 컴퓨팅 파트너십 확대를 발표했습니다. Microsoft는 Azure AI 서비스의 새로운 기능들을 공개하며 기업 고객들의 관심을 끌었습니다.\n\n전문가들은 이러한 AI 기술 발전이 장기적으로 생산성 향상과 새로운 비즈니스 모델 창출에 기여할 것으로 예상한다고 분석했습니다. 다만 단기적으로는 밸류에이션에 대한 우려도 제기되고 있어 신중한 접근이 필요합니다.',
-      videoThumbnail: 'https://via.placeholder.com/600x300/ff6b35/ffffff?text=AI+기술+혁신+발표',
-      tags: ['기술', 'AI', '포트폴리오 알림']
-    },
-    {
-      id: 2,
-      date: '2025-01-19',
-      headline: '연준, 잠재적 금리 조정 신호',
-      summary: '연방준비제도이사회가 다음 분기에 금리 조정 가능성을 시사했습니다. 이러한 변화는 귀하의 채권 보유와 배당 중심 주식에 영향을 미칠 수 있습니다.',
-      fullContent: '연방준비제도이사회가 다음 분기에 금리 조정 가능성을 시사했습니다. 이러한 변화는 귀하의 채권 보유와 배당 중심 주식에 영향을 미칠 수 있습니다. 포트폴리오의 금융 섹터 주식은 변동성이 증가할 수 있습니다.\n\n제롬 파월 연준 의장은 최근 연설에서 인플레이션 지표와 고용 시장 상황을 종합적으로 고려하여 통화 정책을 조정할 것이라고 밝혔습니다. 시장에서는 0.25% 포인트 인하 가능성이 높다고 보고 있습니다.\n\n이에 따라 은행주들은 혼조세를 보이고 있으며, 부동산 투자신탁(REITs)과 유틸리티 주식들은 상승세를 나타내고 있습니다. 투자자들은 금리 변화에 민감한 섹터들의 동향을 주의 깊게 살펴볼 필요가 있습니다.',
-      videoThumbnail: 'https://via.placeholder.com/600x300/2c5aa0/ffffff?text=연준+금리+정책',
-      tags: ['연준', '금리', '채권']
-    },
-    {
-      id: 3,
-      date: '2025-01-18',
-      headline: '에너지 섹터 전망: 재생 에너지 vs 전통 에너지',
-      summary: '재생 에너지 주식이 계속해서 전통적인 에너지 기업들보다 좋은 성과를 보이고 있습니다. 귀하의 청정 에너지 ETF 보유량은 이번 주 4.1% 상승했습니다.',
-      fullContent: '재생 에너지 주식이 계속해서 전통적인 에너지 기업들보다 좋은 성과를 보이고 있습니다. 귀하의 청정 에너지 ETF 보유량은 이번 주 4.1% 상승했습니다. 주요 석유 기업들의 기업 공시는 지속 가능한 에너지로의 전략적 전환을 시사합니다.\n\n태양광과 풍력 에너지 기업들이 새로운 프로젝트 계약을 잇따라 발표하면서 투자자들의 관심이 집중되고 있습니다. 특히 배터리 저장 기술의 발전으로 재생 에너지의 효율성이 크게 개선되고 있습니다.\n\n반면 전통적인 석유 기업들도 ESG 경영을 강화하며 청정 에너지 사업에 대한 투자를 확대하고 있어, 장기적으로는 에너지 전환 과정에서 새로운 기회를 찾을 수 있을 것으로 전망됩니다.',
-      videoThumbnail: 'https://via.placeholder.com/600x300/28a745/ffffff?text=재생+에너지+전망',
-      tags: ['에너지', '재생 에너지', 'ETF 성과']
-    },
-    {
-      id: 4,
-      date: '2025-01-17',
-      headline: '헬스케어 혁신이 시장 낙관론 견인',
-      summary: '획기적인 의학 연구 발표로 헬스케어 주식이 상승했습니다. 귀하의 제약 보유 주식은 일부 기업들이 긍정적인 임상 시험 결과를 보고하면서 혼합된 결과를 보였습니다.',
-      fullContent: '획기적인 의학 연구 발표로 헬스케어 주식이 상승했습니다. 귀하의 제약 보유 주식은 일부 기업들이 긍정적인 임상 시험 결과를 보고하면서 혼합된 결과를 보였습니다. 다음 달 규제 승인이 예상됩니다.\n\n특히 알츠하이머 치료제와 암 면역치료제 분야에서 주목할 만한 진전이 있었습니다. 여러 제약회사들이 3상 임상시험에서 긍정적인 결과를 발표하며 투자자들의 기대감을 높였습니다.\n\nAI를 활용한 신약 개발 플랫폼들도 주목받고 있으며, 개발 기간 단축과 성공률 향상에 기여하고 있습니다. 바이오테크 기업들의 파이프라인 다양화와 함께 헬스케어 섹터의 장기 성장 전망이 밝아지고 있습니다.',
-      videoThumbnail: 'https://via.placeholder.com/600x300/dc3545/ffffff?text=헬스케어+혁신',
-      tags: ['헬스케어', '제약', '임상 시험']
-    },
-    {
-      id: 5,
-      date: '2025-01-16',
-      headline: '글로벌 공급망 개선으로 제조업 활성화',
-      summary: '공급망 혼란이 완화되면서 제조업 섹터가 회복 조짐을 보이고 있습니다. 귀하의 산업 주식 보유는 물류 개선과 운송 비용 감소로 혜택을 받았습니다.',
-      fullContent: '공급망 혼란이 완화되면서 제조업 섹터가 회복 조짐을 보이고 있습니다. 귀하의 산업 주식 보유는 물류 개선과 운송 비용 감소로 혜택을 받았습니다. 분기별 실적 보고서는 다음 주에 예정되어 있습니다.\n\n아시아 지역의 생산 정상화와 함께 해운비 안정화가 제조업체들의 마진 개선에 기여하고 있습니다. 특히 자동차, 전자제품, 기계 부문에서 주문량이 크게 증가했습니다.\n\n스마트 팩토리와 자동화 기술 도입으로 생산 효율성도 향상되고 있어, 제조업의 디지털 전환이 가속화되고 있습니다. 이러한 변화는 장기적으로 제조업 경쟁력 강화에 긍정적인 영향을 미칠 것으로 예상됩니다.',
-      videoThumbnail: 'https://via.placeholder.com/600x300/6c757d/ffffff?text=제조업+회복',
-      tags: ['제조업', '공급망', '실적']
-    }
-  ];
+  // 각 인사이트의 확장 상태를 별도로 관리 (핵심 수정!)
+  const [expandedStates, setExpandedStates] = useState({});
 
-  // Simulate API call
-  const fetchInsights = async (page = 1) => {
-    setLoading(true);
+  // API 기본 URL
+  const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8001'
+    : `http://${window.location.hostname}:8001`;
 
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const startIndex = (page - 1) * insightsPerPage;
-    const endIndex = startIndex + insightsPerPage;
-    const pageInsights = mockInsights.slice(startIndex, endIndex);
-
-    if (page === 1) {
-      setInsights(pageInsights);
-    } else {
-      setInsights(prev => [...prev, ...pageInsights]);
-    }
-
-    setHasMore(endIndex < mockInsights.length);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchInsights(1);
-  }, []);
-
-  const loadMore = () => {
-    if (!loading && hasMore) {
-      const nextPage = currentPage + 1;
-      setCurrentPage(nextPage);
-      fetchInsights(nextPage);
-    }
-  };
-
+  // 날짜 포맷팅
   const formatDate = (dateString) => {
     const options = {
       year: 'numeric',
@@ -101,23 +27,319 @@ const DailyInsights = () => {
     return new Date(dateString).toLocaleDateString('ko-KR', options);
   };
 
-  const refreshInsights = () => {
-    setCurrentPage(1);
-    setExpandedPosts(new Set());
-    fetchInsights(1);
+  // 확장 상태 토글 함수 (useCallback으로 최적화)
+  const toggleExpanded = useCallback((insightId) => {
+    setExpandedStates(prev => ({
+      ...prev,
+      [insightId]: !prev[insightId]
+    }));
+  }, []);
+
+  // 새로운 인사이트 생성 (기존 인사이트는 유지)
+  const generateNewInsight = async () => {
+    console.log('새 인사이트 생성 시작');
+
+    setIsGenerating(true);
+    setError(null);
+    setProgress({ status: 'starting', progress: 10, message: '새로운 인사이트 생성 중...' });
+
+    try {
+      // 1. 인사이트 생성 + 영상 생성 요청
+      const response = await fetch(`${API_BASE_URL}/api/insights/generate-video/current_user?refresh_data=true`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          avatar_id: "default",
+          voice_id: "default",
+          background: "professional"  // office -> professional로 변경
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API 요청 실패: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('인사이트 생성 완료:', result);
+
+      // 2. 새로운 인사이트 데이터 생성
+      const newInsightId = `insight_${Date.now()}`;
+      const newInsight = {
+        id: newInsightId,
+        date: new Date().toISOString().split('T')[0],
+        headline: '실시간 AI 생성 투자 인사이트',
+        summary: result.script_info.script.substring(0, 200) + '...',
+        fullContent: result.script_info.script,
+        scriptLength: result.script_info.script_length,
+        readingTime: result.script_info.estimated_reading_time,
+        analysisMethod: result.insight_data.analysis_method,
+        modelUsed: result.insight_data.model_used,
+        videoUrl: null,
+        videoThumbnail: 'https://via.placeholder.com/600x300/9c27b0/ffffff?text=실시간+AI+인사이트',
+        tags: ['실시간', 'AI 생성', '개인화'],
+        isGenerating: true
+      };
+
+      // 3. 기존 인사이트 목록 맨 앞에 새 인사이트 추가
+      setInsights(prevInsights => [newInsight, ...prevInsights]);
+
+      const videoId = result.video_info.video_id;
+      console.log('영상 ID:', videoId);
+
+      setProgress({ status: 'processing', progress: 30, message: '영상 생성 중... 약 2-3분 소요 예상' });
+
+      // 4. 영상 생성 상태 모니터링
+      await monitorVideoProgress(videoId, newInsightId);
+
+    } catch (error) {
+      console.error('인사이트 생성 오류:', error);
+      setError(`새 인사이트 생성 실패: ${error.message}`);
+      setProgress({ status: 'failed', progress: 0, message: '생성 실패' });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const toggleExpanded = (postId) => {
-    setExpandedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(postId)) {
-        newSet.delete(postId);
-      } else {
-        newSet.add(postId);
-      }
-      return newSet;
+  // 영상 생성 진행상황 모니터링 (useCallback으로 최적화)
+  const monitorVideoProgress = useCallback(async (videoId, insightId) => {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 1200; // 10분
+
+      const checkStatus = async () => {
+        attempts++;
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/insights/video-status/${videoId}`);
+
+          if (!response.ok) {
+            throw new Error('상태 확인 실패');
+          }
+
+          const data = await response.json();
+          const status = data.status;
+
+          console.log(`영상 상태 (${attempts}/${maxAttempts}):`, status);
+
+          // 진행률 계산
+          const progressPercent = Math.min(90, 30 + (attempts / maxAttempts) * 60);
+
+          setProgress({
+            status: status,
+            progress: progressPercent,
+            message: getStatusMessage(status, attempts, maxAttempts)
+          });
+
+          if (status === 'completed') {
+            // 해당 인사이트에 비디오 URL 업데이트 (불변성 유지)
+            setInsights(prevInsights =>
+              prevInsights.map(insight =>
+                insight.id === insightId
+                  ? { ...insight, videoUrl: data.video_url, isGenerating: false }
+                  : insight
+              )
+            );
+            setProgress({ status: 'completed', progress: 100, message: '영상 생성 완료!' });
+            resolve();
+          } else if (status === 'failed') {
+            // 생성 실패한 인사이트 표시 업데이트
+            setInsights(prevInsights =>
+              prevInsights.map(insight =>
+                insight.id === insightId
+                  ? { ...insight, isGenerating: false, videoFailed: true }
+                  : insight
+              )
+            );
+            throw new Error('영상 생성 실패');
+          } else if (attempts >= maxAttempts) {
+            setInsights(prevInsights =>
+              prevInsights.map(insight =>
+                insight.id === insightId
+                  ? { ...insight, isGenerating: false, videoFailed: true }
+                  : insight
+              )
+            );
+            throw new Error('시간 초과');
+          } else {
+            // 5초 후 다시 확인
+            setTimeout(checkStatus, 5000);
+          }
+
+        } catch (error) {
+          setProgress({ status: 'failed', progress: 0, message: error.message });
+          reject(error);
+        }
+      };
+
+      // 첫 번째 상태 확인
+      checkStatus();
     });
+  }, [API_BASE_URL]);
+
+  // 상태 메시지 생성
+  const getStatusMessage = (status, attempts, maxAttempts) => {
+    switch (status) {
+      case 'processing':
+        const remaining = Math.max(1, Math.ceil((maxAttempts - attempts) / 12));
+        return `영상 처리 중... 약 ${remaining}분 남음`;
+      case 'waiting':
+        return '대기 중...';
+      case 'pending':
+        return '처리 대기 중...';
+      case 'completed':
+        return '영상 생성 완료!';
+      case 'failed':
+        return '영상 생성 실패';
+      default:
+        return '상태 확인 중...';
+    }
   };
+
+  // 개별 인사이트 컴포넌트 (React.memo로 최적화)
+  const InsightCard = React.memo(({ insight, isLatest, isExpanded, onToggleExpand }) => {
+    return (
+      <article className={`insight-card ${isLatest ? 'latest' : ''}`}>
+        <div className="insight-header">
+          <div className="insight-date">
+            {formatDate(insight.date)}
+          </div>
+          <div className="insight-tags">
+            {insight.tags.map((tag, index) => (
+              <span key={index} className="insight-tag">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <h2 className="insight-headline">
+          {insight.headline}
+        </h2>
+
+        {/* 영상 영역 */}
+        <div className="insight-video-container">
+          {insight.videoUrl ? (
+            // 영상 완성됨
+            <video
+              src={insight.videoUrl}
+              controls
+              className="insight-video-thumbnail"
+              poster={insight.videoThumbnail}
+            />
+          ) : (
+            // 영상 생성 중, 대기, 또는 실패
+            <>
+              <img
+                src={insight.videoThumbnail}
+                alt={insight.headline}
+                className="insight-video-thumbnail"
+              />
+              <div className="video-play-overlay">
+                {insight.isGenerating ? (
+                  // 영상 생성 중
+                  <div className="video-generation-progress">
+                    <div className="loading-spinner"></div>
+                    <div className="progress-info">
+                      <div className="progress-status">
+                        {isLatest && progress.message ? progress.message : '영상 생성 중...'}
+                      </div>
+                      {isLatest && progress.progress > 0 && (
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${progress.progress}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : insight.videoFailed ? (
+                  // 영상 생성 실패
+                  <div className="video-failed">
+                    <span>⚠️ 영상 생성 실패</span>
+                  </div>
+                ) : (
+                  // 기본 상태 (Mock 데이터)
+                  <div className="play-button">📹</div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 스크립트 내용 */}
+        <div className="insight-content">
+          <p className="insight-summary">
+            {isExpanded ? insight.fullContent : insight.summary}
+          </p>
+
+          <button
+            className="read-more-btn"
+            onClick={onToggleExpand}
+          >
+            {isExpanded ? '접기' : '전체 스크립트 보기'}
+          </button>
+        </div>
+
+        <div className="insight-footer">
+          <span className="insight-source">
+            AI 생성 • 귀하의 포트폴리오 기반 • {insight.analysisMethod}
+          </span>
+        </div>
+      </article>
+    );
+  });
+
+  // 컴포넌트 마운트시 Mock 데이터 로드
+  useEffect(() => {
+    const mockInsights = [
+      {
+        id: 'mock_1',
+        date: '2025-01-27',
+        headline: '삼성전자 반도체 부문 실적 개선 전망',
+        summary: 'AI 반도체 수요 증가로 인한 메모리 가격 상승세가 지속되고 있습니다. 삼성전자의 4분기 실적 발표를 앞두고 긍정적인 전망이 이어지고 있으며...',
+        fullContent: 'AI 반도체 수요 증가로 인한 메모리 가격 상승세가 지속되고 있습니다. 삼성전자의 4분기 실적 발표를 앞두고 긍정적인 전망이 이어지고 있으며, 특히 HBM(고대역폭 메모리) 부문에서의 성장이 주목받고 있습니다. 엔비디아와의 공급 계약 확대 소식과 함께 중장기적으로 안정적인 성장이 예상됩니다. 다만 중국 시장 불확실성과 환율 변동성은 여전히 리스크 요인으로 작용할 것으로 보입니다.',
+        scriptLength: 187,
+        readingTime: '약 1분',
+        analysisMethod: 'Graph RAG + 실시간 뉴스 분석',
+        modelUsed: 'GPT-4',
+        videoUrl: null,
+        videoThumbnail: 'https://via.placeholder.com/600x300/4285f4/ffffff?text=삼성전자+반도체+분석',
+        tags: ['반도체', '삼성전자', 'AI']
+      },
+      {
+        id: 'mock_2',
+        date: '2025-01-26',
+        headline: 'NAVER 클라우드 사업 확장과 AI 투자 현황',
+        summary: 'NAVER가 하이퍼클로바X 기반의 B2B 사업을 본격 확장하고 있습니다. 클라우드 매출이 전년 대비 35% 증가하며 성장세를 보이고 있고...',
+        fullContent: 'NAVER가 하이퍼클로바X 기반의 B2B 사업을 본격 확장하고 있습니다. 클라우드 매출이 전년 대비 35% 증가하며 성장세를 보이고 있고, 특히 금융권과 공공기관에서의 도입이 활발합니다. AI 검색 고도화와 개인화 서비스 강화로 MAU 증가세도 지속되고 있어 긍정적입니다. 다만 광고 시장 경쟁 심화와 신규 서비스 투자비용 증가는 단기 수익성에 부담을 줄 수 있습니다.',
+        scriptLength: 162,
+        readingTime: '약 1분',
+        analysisMethod: 'DART 공시 + 뉴스 크롤링',
+        modelUsed: 'GPT-4',
+        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        videoThumbnail: 'https://via.placeholder.com/600x300/03c75a/ffffff?text=NAVER+클라우드+AI',
+        tags: ['NAVER', 'AI', '클라우드']
+      },
+      {
+        id: 'mock_3',
+        date: '2025-01-25',
+        headline: 'SK하이닉스 HBM 시장 점유율 확대 전략',
+        summary: 'SK하이닉스가 HBM3E 양산을 본격화하며 엔비디아 H200 GPU 공급을 시작했습니다. HBM 시장에서의 독점적 지위를 활용해...',
+        fullContent: 'SK하이닉스가 HBM3E 양산을 본격화하며 엔비디아 H200 GPU 공급을 시작했습니다. HBM 시장에서의 독점적 지위를 활용해 마진율 개선이 기대됩니다. 2025년 HBM 매출은 전년 대비 100% 이상 증가할 것으로 전망되며, 차세대 HBM4 개발도 순조롭게 진행되고 있습니다. AMD, 구글과의 파트너십 확대도 성장 동력이 될 것으로 보입니다.',
+        scriptLength: 145,
+        readingTime: '약 50초',
+        analysisMethod: 'Graph RAG + 실시간 시세',
+        modelUsed: 'GPT-4',
+        videoUrl: null,
+        videoThumbnail: 'https://via.placeholder.com/600x300/ff6b35/ffffff?text=SK하이닉스+HBM',
+        tags: ['SK하이닉스', 'HBM', '메모리']
+      }
+    ];
+
+    setInsights(mockInsights);
+  }, []);
 
   return (
     <div className="daily-insights">
@@ -130,106 +352,64 @@ const DailyInsights = () => {
           </p>
           <button
             className="refresh-button"
-            onClick={refreshInsights}
-            disabled={loading}
+            onClick={generateNewInsight}
+            disabled={isGenerating}
           >
-            {loading ? <span className="loading-spinner"></span> : '🔄'}
-            인사이트 새로고침
+            {isGenerating ? <span className="loading-spinner"></span> : '🔄'}
+            새 인사이트 생성
           </button>
         </div>
 
+        {/* 에러 상태 */}
+        {error && (
+          <div className="error-state">
+            <div className="error-icon">⚠️</div>
+            <h3>인사이트 생성 오류</h3>
+            <p>{error}</p>
+            <button className="retry-button" onClick={generateNewInsight}>
+              다시 시도
+            </button>
+          </div>
+        )}
+
         {/* 인사이트 목록 */}
         <div className="insights-list">
-          {insights.map((insight) => {
-            const isExpanded = expandedPosts.has(insight.id);
-            return (
-              <article key={insight.id} className="insight-card">
-                <div className="insight-header">
-                  <div className="insight-date">
-                    {formatDate(insight.date)}
-                  </div>
-                  <div className="insight-tags">
-                    {insight.tags.map((tag, index) => (
-                      <span key={index} className="insight-tag">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <h2 className="insight-headline">
-                  {insight.headline}
-                </h2>
-
-                {/* 동영상 썸네일 (이미지로 대체) */}
-                <div className="insight-video-container">
-                  <img
-                    src={insight.videoThumbnail}
-                    alt={insight.headline}
-                    className="insight-video-thumbnail"
-                  />
-                  <div className="video-play-overlay">
-                    <div className="play-button">▶</div>
-                  </div>
-                </div>
-
-                {/* 텍스트 콘텐츠 */}
-                <div className="insight-content">
-                  <p className="insight-summary">
-                    {isExpanded ? insight.fullContent : insight.summary}
-                  </p>
-
-                  <button
-                    className="read-more-btn"
-                    onClick={() => toggleExpanded(insight.id)}
-                  >
-                    {isExpanded ? '접기' : '더보기'}
-                  </button>
-                </div>
-
-                <div className="insight-footer">
-                  <span className="insight-source">
-                    AI 생성 • 귀하의 포트폴리오 기반
-                  </span>
-                </div>
-              </article>
-            );
-          })}
+          {insights.map((insight, index) => (
+            <InsightCard
+              key={insight.id}
+              insight={insight}
+              isLatest={index === 0 && insight.isGenerating}
+              isExpanded={expandedStates[insight.id] || false}
+              onToggleExpand={() => toggleExpanded(insight.id)}
+            />
+          ))}
         </div>
 
-        {/* 로딩 상태 */}
-        {loading && insights.length === 0 && (
+        {/* 빈 상태 */}
+        {insights.length === 0 && !error && (
           <div className="loading-state">
             <div className="loading-spinner large"></div>
             <p>데일리 인사이트를 불러오는 중...</p>
           </div>
         )}
 
-        {/* 더 불러오기 버튼 */}
-        {!loading && hasMore && insights.length > 0 && (
-          <div className="load-more-container">
-            <button
-              className="load-more-button"
-              onClick={loadMore}
-            >
-              인사이트 더 불러오기
-            </button>
-          </div>
-        )}
-
-        {/* 콘텐츠 끝 메시지 */}
-        {!loading && !hasMore && insights.length > 0 && (
-          <div className="end-message">
-            <p>모든 데일리 인사이트를 확인하셨습니다.</p>
-          </div>
-        )}
-
-        {/* 빈 상태 */}
-        {!loading && insights.length === 0 && (
-          <div className="empty-state">
-            <div className="empty-icon">📊</div>
-            <h3>이용 가능한 인사이트가 없습니다</h3>
-            <p>맞춤형 시장 분석을 위해 나중에 다시 확인해주세요.</p>
+        {/* 디버깅 정보 (개발 환경에서만) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div style={{
+            position: 'fixed',
+            bottom: '10px',
+            right: '10px',
+            background: 'rgba(0,0,0,0.8)',
+            color: 'white',
+            padding: '10px',
+            borderRadius: '5px',
+            fontSize: '12px',
+            zIndex: 1000
+          }}>
+            <div>영상 생성 중: {isGenerating ? 'YES' : 'NO'}</div>
+            <div>진행률: {progress.progress}%</div>
+            <div>상태: {progress.status}</div>
+            <div>확장된 카드: {Object.keys(expandedStates).filter(id => expandedStates[id]).length}개</div>
           </div>
         )}
       </div>

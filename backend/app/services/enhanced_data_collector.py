@@ -1,4 +1,4 @@
-# app/services/enhanced_data_collector.py
+# app/services/enhanced_data_collector.py (최종 수정 - 동기/비동기 명확 분리)
 import requests
 import json
 import os
@@ -18,7 +18,7 @@ from .playwright_news_crawler import PlaywrightNewsCrawler
 
 
 class EnhancedDataCollector:
-    """향상된 금융 데이터 수집 시스템 (Playwright 통합)"""
+    """향상된 금융 데이터 수집 시스템 (Playwright 통합 - 최종 수정)"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -34,7 +34,7 @@ class EnhancedDataCollector:
         self.playwright_crawler = PlaywrightNewsCrawler(self.cache_dir)
 
         self.init_database()
-        print(">>> 데이터 수집기 초기화 완료 (Playwright 통합)")
+        print(">>> 데이터 수집기 초기화 완료 (Playwright 통합 - 최종 수정)")
 
     def init_database(self):
         """SQLite 데이터베이스 및 테이블 초기화"""
@@ -58,10 +58,12 @@ class EnhancedDataCollector:
         conn.commit()
         conn.close()
 
+    # === 동기 버전 메서드들 (기존 방식) ===
+
     def collect_comprehensive_news(
         self, limit: int = 20, use_playwright: bool = True
     ) -> List[NewsItem]:
-        """종합 뉴스 수집 (Playwright 우선, BeautifulSoup 폴백)"""
+        """동기 종합 뉴스 수집 (Playwright 스레드 방식)"""
         print(
             f">>> 뉴스 수집 모드: {'Playwright' if use_playwright else 'BeautifulSoup'}"
         )
@@ -70,17 +72,25 @@ class EnhancedDataCollector:
             try:
                 print(">> Playwright 모드로 뉴스 수집 중...")
 
-                # 비동기 이벤트 루프 처리
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                # 스레드 방식으로 Playwright 실행 (동기 환경용)
+                import concurrent.futures
+                import threading
 
-                # Playwright로 뉴스 수집
-                playwright_data = loop.run_until_complete(
-                    self.playwright_crawler.collect_naver_financial_news(limit)
-                )
+                def run_playwright_in_thread():
+                    """별도 스레드에서 Playwright 실행"""
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(
+                            self.playwright_crawler.collect_naver_financial_news(limit)
+                        )
+                    finally:
+                        new_loop.close()
+
+                # 스레드에서 실행
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_playwright_in_thread)
+                    playwright_data = future.result(timeout=120)  # 2분 타임아웃
 
                 # Playwright 데이터를 NewsItem 객체로 변환
                 news_items = []
@@ -112,6 +122,176 @@ class EnhancedDataCollector:
         # BeautifulSoup 폴백
         print(">> BeautifulSoup 모드로 뉴스 수집 중...")
         return self._collect_naver_financial_news_fallback(limit)
+
+    def collect_all_data(
+        self,
+        user_id: Optional[str] = None,
+        refresh_cache: bool = False,
+        use_playwright: bool = True,
+    ) -> Dict:
+        """전체 데이터 수집 (동기 버전)"""
+        print(
+            f">> 실제 금융 데이터 수집 시작 (동기 모드, {'Playwright' if use_playwright else 'BeautifulSoup'})"
+        )
+
+        # 뉴스 수집 (동기 버전 사용)
+        news = self.collect_comprehensive_news(limit=10, use_playwright=use_playwright)
+
+        # 공시 수집
+        disclosures = self.collect_comprehensive_disclosures(limit=10)
+
+        # 사용자별 맞춤 종목 리스트 구성
+        all_symbols = ["005930", "000660", "035420"]
+        personalized_data = {}
+
+        if user_id:
+            personalized_data = self.get_personalized_data(user_id)
+            if personalized_data.get("portfolio"):
+                portfolio_symbols = {
+                    holding[0] for holding in personalized_data["portfolio"]
+                }
+                all_symbols.extend(list(portfolio_symbols))
+                all_symbols = list(set(all_symbols))
+
+        # 주식 데이터 수집
+        stock_data = self.collect_comprehensive_stock_data(all_symbols)
+
+        # 데이터 수집 결과 검증
+        total_collected = len(news) + len(disclosures) + len(stock_data)
+        if total_collected == 0:
+            print(">> 경고: 모든 실제 데이터 수집에 실패했습니다.")
+        else:
+            print(f">> 총 {total_collected}건의 실제 데이터 수집 완료")
+
+        result = {
+            "news": news,
+            "disclosures": disclosures,
+            "stock_data": stock_data,
+            "personalized": personalized_data,
+            "collected_at": datetime.now().isoformat(),
+            "data_sources": {
+                "news_count": len(news),
+                "disclosures_count": len(disclosures),
+                "stock_count": len(stock_data),
+                "is_playwright_used": use_playwright,
+                "is_real_data_only": True,
+                "collection_mode": "synchronous",
+            },
+        }
+
+        return result
+
+    # === 비동기 버전 메서드들 (FastAPI 전용) ===
+
+    async def collect_comprehensive_news_async(
+        self, limit: int = 20, use_playwright: bool = True
+    ) -> List[NewsItem]:
+        """비동기 종합 뉴스 수집 (FastAPI 환경용)"""
+        print(
+            f">>> 뉴스 수집 모드: {'Playwright' if use_playwright else 'BeautifulSoup'} (비동기)"
+        )
+
+        if use_playwright:
+            try:
+                print(">> Playwright 모드로 뉴스 수집 중... (비동기)")
+
+                # FastAPI 환경에서는 직접 await 사용
+                playwright_data = (
+                    await self.playwright_crawler.collect_naver_financial_news(limit)
+                )
+
+                # Playwright 데이터를 NewsItem 객체로 변환
+                news_items = []
+                for item_data in playwright_data:
+                    news_item = NewsItem(
+                        title=item_data["title"],
+                        summary=item_data["summary"],
+                        source=item_data["source"] or "네이버금융",
+                        published_at=item_data["published_at"]
+                        or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        entities=item_data["entities"],
+                        importance_score=item_data["importance_score"],
+                    )
+                    news_items.append(news_item)
+
+                if news_items:
+                    self._save_news_to_db(news_items)
+                    print(
+                        f">>> Playwright로 뉴스 {len(news_items)}건 수집 및 저장 완료 (비동기)"
+                    )
+                    return news_items
+                else:
+                    print(">> Playwright 수집 실패, BeautifulSoup으로 재시도...")
+
+            except Exception as e:
+                print(f">> Playwright 오류 (비동기): {e}")
+                print(">> BeautifulSoup 방식으로 폴백...")
+
+        # BeautifulSoup 폴백
+        print(">> BeautifulSoup 모드로 뉴스 수집 중... (비동기)")
+        return self._collect_naver_financial_news_fallback(limit)
+
+    async def collect_all_data_async(
+        self,
+        user_id: Optional[str] = None,
+        refresh_cache: bool = False,
+        use_playwright: bool = True,
+    ) -> Dict:
+        """전체 데이터 수집 (비동기 버전 - FastAPI용)"""
+        print(
+            f">> 실제 금융 데이터 수집 시작 (비동기 모드, {'Playwright' if use_playwright else 'BeautifulSoup'})"
+        )
+
+        # 뉴스 수집 (비동기)
+        news = await self.collect_comprehensive_news_async(
+            limit=10, use_playwright=use_playwright
+        )
+
+        # 공시 수집 (동기)
+        disclosures = self.collect_comprehensive_disclosures(limit=10)
+
+        # 사용자별 맞춤 종목 리스트 구성
+        all_symbols = ["005930", "000660", "035420"]
+        personalized_data = {}
+
+        if user_id:
+            personalized_data = self.get_personalized_data(user_id)
+            if personalized_data.get("portfolio"):
+                portfolio_symbols = {
+                    holding[0] for holding in personalized_data["portfolio"]
+                }
+                all_symbols.extend(list(portfolio_symbols))
+                all_symbols = list(set(all_symbols))
+
+        # 주식 데이터 수집 (동기)
+        stock_data = self.collect_comprehensive_stock_data(all_symbols)
+
+        # 데이터 수집 결과 검증
+        total_collected = len(news) + len(disclosures) + len(stock_data)
+        if total_collected == 0:
+            print(">> 경고: 모든 실제 데이터 수집에 실패했습니다.")
+        else:
+            print(f">> 총 {total_collected}건의 실제 데이터 수집 완료")
+
+        result = {
+            "news": news,
+            "disclosures": disclosures,
+            "stock_data": stock_data,
+            "personalized": personalized_data,
+            "collected_at": datetime.now().isoformat(),
+            "data_sources": {
+                "news_count": len(news),
+                "disclosures_count": len(disclosures),
+                "stock_count": len(stock_data),
+                "is_playwright_used": use_playwright,
+                "is_real_data_only": True,
+                "collection_mode": "asynchronous",
+            },
+        }
+
+        return result
+
+    # === 공통 메서드들 ===
 
     def _collect_naver_financial_news_fallback(self, limit: int) -> List[NewsItem]:
         """BeautifulSoup 기반 뉴스 수집 (폴백용)"""
@@ -350,64 +530,7 @@ class EnhancedDataCollector:
 
         return stock_data
 
-    def collect_all_data(
-        self,
-        user_id: Optional[str] = None,
-        refresh_cache: bool = False,
-        use_playwright: bool = True,
-    ) -> Dict:
-        """전체 데이터 수집 (Playwright 통합)"""
-        print(
-            f">> 실제 금융 데이터 수집 시작 ({'Playwright' if use_playwright else 'BeautifulSoup'} 모드)"
-        )
-
-        # 뉴스 수집 (Playwright 우선)
-        news = self.collect_comprehensive_news(limit=10, use_playwright=use_playwright)
-
-        # 공시 수집
-        disclosures = self.collect_comprehensive_disclosures(limit=10)
-
-        # 사용자별 맞춤 종목 리스트 구성
-        all_symbols = ["005930", "000660", "035420"]
-        personalized_data = {}
-
-        if user_id:
-            personalized_data = self.get_personalized_data(user_id)
-            if personalized_data.get("portfolio"):
-                portfolio_symbols = {
-                    holding[0] for holding in personalized_data["portfolio"]
-                }
-                all_symbols.extend(list(portfolio_symbols))
-                all_symbols = list(set(all_symbols))
-
-        # 주식 데이터 수집
-        stock_data = self.collect_comprehensive_stock_data(all_symbols)
-
-        # 데이터 수집 결과 검증
-        total_collected = len(news) + len(disclosures) + len(stock_data)
-        if total_collected == 0:
-            print(">> 경고: 모든 실제 데이터 수집에 실패했습니다.")
-        else:
-            print(f">> 총 {total_collected}건의 실제 데이터 수집 완료")
-
-        result = {
-            "news": news,
-            "disclosures": disclosures,
-            "stock_data": stock_data,
-            "personalized": personalized_data,
-            "collected_at": datetime.now().isoformat(),
-            "data_sources": {
-                "news_count": len(news),
-                "disclosures_count": len(disclosures),
-                "stock_count": len(stock_data),
-                "is_playwright_used": use_playwright,
-                "is_real_data_only": True,
-            },
-        }
-
-        return result
-
-    # 기존 헬퍼 메서드들 유지...
+    # 나머지 헬퍼 메서드들은 기존과 동일...
     def _extract_entities_from_text(self, text: str) -> List[str]:
         """텍스트에서 금융 엔티티 추출"""
         known_entities = [

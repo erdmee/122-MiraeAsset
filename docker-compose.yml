@@ -7,7 +7,15 @@ services:
       - "8001:8001"
     volumes:
       - ./backend:/app
+    env_file:
+      - ./backend/.env
     working_dir: /app
+    # Playwright 헤드리스 모드를 위한 환경변수 추가
+    environment:
+      - DISPLAY=:99
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    # 더 많은 메모리와 shared memory 할당 (Playwright용)
+    shm_size: 2gb
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
     restart: unless-stopped
 

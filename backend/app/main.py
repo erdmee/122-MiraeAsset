@@ -1,4 +1,10 @@
 # app/main.py
+import os
+from dotenv import load_dotenv
+
+# .env 파일 로드 (맨 위에 추가)
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -59,5 +65,5 @@ async def health_check():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "app.main:app", host="0.0.0.0", port=8004, reload=True, log_level="info"
+        "app.main:app", host="0.0.0.0", port=8001, reload=True, log_level="info"
     )
