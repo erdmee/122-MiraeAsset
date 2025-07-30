@@ -21,6 +21,19 @@ class Settings(BaseSettings):
     # --- 데이터베이스 및 캐시 설정 ---
     DB_PATH: str = "data/financial_data.db"
     CACHE_DIR: str = "data/cache"
+
+    # --- Elasticsearch 설정 ---
+    ELASTICSEARCH_HOST: str = "elasticsearch"
+    ELASTICSEARCH_PORT: int = 9200
+    ELASTICSEARCH_INDEX_NAME: str = "financial_documents"
+    ELASTICSEARCH_TIMEOUT: int = 30
+    ELASTICSEARCH_MAX_RETRIES: int = 3
+
+    # --- Neo4j 설정 ---
+    NEO4J_URI: str = "bolt://neo4j:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = "122miraeasset"
+
     USER_AGENT: str = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
@@ -65,7 +78,9 @@ def check_api_settings():
     print("=== API 설정 상태 ===")
     print(f"OpenAI API Key: {'설정됨' if settings.OPENAI_API_KEY else '미설정'}")
     print(f"DART API Key: {'설정됨' if settings.DART_API_KEY else '미설정'}")
-    print(f"HyperCLOVA API Key: {'설정됨' if settings.NAVER_CLOVA_API_KEY else '미설정'}")
+    print(
+        f"HyperCLOVA API Key: {'설정됨' if settings.NAVER_CLOVA_API_KEY else '미설정'}"
+    )
     print(f"HeyGen API Key: {'설정됨' if settings.HEYGEN_API_KEY else '미설정'}")
     print(f"HyperCLOVA 사용: {settings.USE_HYPERCLOVA}")
     print(f"새로운 CLOVA API 사용: {settings.USE_NEW_CLOVA_API}")

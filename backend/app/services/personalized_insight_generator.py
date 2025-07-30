@@ -1,26 +1,306 @@
-from typing import Dict, List, Optional
-from datetime import datetime
+# app/services/personalized_insight_generator.py
+
+import asyncio
+from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta
 import json
 import sqlite3
+import logging
+
 from app.config import settings
-from app.services.simple_graph_rag import SimpleGraphRAG
-from app.services.enhanced_data_collector import EnhancedDataCollector
-from app.services.hyperclova_client import UnifiedLLMClient
+from app.services.core.enhanced_graph_rag import EnhancedGraphRAG
+from app.services.storage.insight_storage import InsightStorage
+from app.services.storage.user_memory import UserMemorySystem
+from app.services.storage.enhanced_data_collector import EnhancedDataCollector
+from app.services.external.hyperclova_client import UnifiedLLMClient
+
+logger = logging.getLogger(__name__)
 
 
 class PersonalizedInsightGenerator:
-    """개인화된 AI 인사이트 생성기 (HyperCLOVA X 지원)"""
+    """개인화된 투자 인사이트 생성기 (Graph RAG + 메모리 강화)"""
 
     def __init__(self):
-        self.graph_rag = SimpleGraphRAG()
+        self.enhanced_graph_rag = EnhancedGraphRAG()
+        self.graph_rag = self.enhanced_graph_rag  # 하위 호환성을 위한 별칭
+        self.insight_storage = InsightStorage()
+        self.user_memory = UserMemorySystem()
         self.data_collector = EnhancedDataCollector()
         self.llm_client = UnifiedLLMClient()
 
         if self.llm_client.is_available():
             provider = self.llm_client.get_current_provider()
-            print(f">> AI 인사이트 생성기 초기화 완료 (사용: {provider})")
+            logger.info(f"개인화 인사이트 생성기 초기화 완료 (사용: {provider})")
         else:
-            print(">> 사용 가능한 LLM API가 없음. Mock 모드로 실행")
+            logger.warning("사용 가능한 LLM API가 없음. Mock 모드로 실행")
+
+    async def generate_daily_insight(
+        self, user_id: str, query: str = "오늘의 시장 상황과 내 포트폴리오 분석"
+    ) -> Dict[str, Any]:
+        """일일 개인화 인사이트 생성 (Graph RAG + 메모리 활용)"""
+
+        # 1. 사용자 컨텍스트 수집
+        user_context = await self.user_memory.get_user_context(user_id)
+        logger.info(f"사용자 컨텍스트: {user_context.get('context_summary', 'N/A')}")
+
+        # 2. Graph RAG를 통한 실시간 분석
+        graph_context = await self.enhanced_graph_rag.get_real_time_graph_context(
+            query, user_context
+        )
+
+        # 3. 관련 시장 데이터 수집
+        market_data = await self._collect_personalized_market_data(
+            user_context.get("holdings", []), user_context.get("interests", [])
+        )
+
+        # 4. 기존 인사이트 검색 (중복 방지 및 참고)
+        previous_insights = await self.insight_storage.search_insights(
+            query=query, user_id=user_id, limit=3
+        )
+
+        # 5. Graph RAG 기반 개인화 인사이트 생성
+        insight = await self._generate_graph_enhanced_insight(
+            user_context, graph_context, market_data, previous_insights
+        )
+
+        # 6. 액션 아이템 추출
+        action_items = await self._extract_action_items(insight, user_context)
+
+        # 7. 인사이트 저장
+        insight_id = await self.insight_storage.store_insight(
+            insight_content=insight,
+            user_query=query,
+            user_id=user_id,
+            entities=graph_context.get("entities", []),
+            metadata={
+                "graph_rag_used": True,
+                "data_sources": ["neo4j", "elasticsearch", "real_time_news"],
+                "confidence_score": 0.85,
+                "user_personalization": True,
+            },
+        )
+
+        # 8. 대화 기록 저장
+        await self.user_memory.save_message(
+            user_id=user_id,
+            session_id=f"daily_insight_{datetime.now().strftime('%Y%m%d')}",
+            message_type="assistant",
+            content=insight[:500],  # 요약본 저장
+            entities=graph_context.get("entities", []),
+            intent="daily_insight",
+        )
+
+        return {
+            "insight": insight,
+            "insight_id": insight_id,
+            "action_items": action_items,
+            "graph_context": graph_context,
+            "market_data": market_data,
+            "previous_insights": previous_insights,
+            "generated_at": datetime.now().isoformat(),
+            "user_context_summary": user_context.get("context_summary", ""),
+        }
+
+    async def _generate_graph_enhanced_insight(
+        self,
+        user_context: Dict,
+        graph_context: Dict,
+        market_data: Dict,
+        previous_insights: List[Dict],
+    ) -> str:
+        """Graph RAG 강화된 개인화 인사이트 생성"""
+
+        # 사용자 보유 주식 정보
+        holdings_info = ""
+        if user_context.get("holdings"):
+            holdings_info = "보유 주식:\n"
+            for holding in user_context["holdings"][:5]:
+                holdings_info += f"- {holding['stock_name']}: {holding['quantity']}주 (평균 {holding['avg_price']:,}원)\n"
+
+        # Graph 커뮤니티 요약
+        communities_summary = ""
+        for comm in graph_context.get("communities", [])[:3]:
+            communities_summary += f"- {comm['center']}: {comm['summary']}\n"
+
+        # 최신 뉴스 하이라이트
+        news_highlights = ""
+        for news in graph_context.get("recent_news", [])[:3]:
+            news_highlights += (
+                f"- {news['title']} (중요도: {news.get('importance', 0)})\n"
+            )
+
+        # 기존 인사이트 참고사항
+        insight_context = ""
+        if previous_insights:
+            insight_context = "이전 분석 참고사항:\n"
+            for insight in previous_insights[:2]:
+                insight_context += (
+                    f"- {insight['title']}: {insight['summary'][:100]}...\n"
+                )
+
+        prompt = f"""
+당신은 한국의 전문 금융 투자 애널리스트입니다. Graph RAG를 통해 실시간으로 수집된 데이터와 사용자의 개인 정보를 바탕으로 고도로 개인화된 투자 인사이트를 제공해주세요.
+
+=== 사용자 프로필 ===
+투자 경험: {user_context.get('user_profile', {}).get('investment_experience', '미정')}
+위험 성향: {user_context.get('user_profile', {}).get('risk_tolerance', '미정')}
+투자 목표: {', '.join(user_context.get('user_profile', {}).get('investment_goals', []))}
+
+{holdings_info}
+
+최근 관심사: {', '.join([e[0] for e in user_context.get('frequent_entities', [])[:5]])}
+
+=== Graph RAG 실시간 분석 ===
+
+🏢 커뮤니티 중심성 분석:
+{communities_summary}
+
+📰 최신 시장 이슈 (지난 7일):
+{news_highlights}
+
+🔗 관계 네트워크 인사이트:
+- 총 {len(graph_context.get('graph_relationships', {}).get('relationships', []))}개 관계 분석됨
+- {len(graph_context.get('entities', []))}개 엔티티 발견
+- {len(graph_context.get('communities', []))}개 커뮤니티 식별
+
+=== 시장 데이터 ===
+{market_data.get('summary', '시장 데이터 수집 중...')}
+
+{insight_context}
+
+위 정보를 종합하여 다음 형식으로 개인화된 투자 인사이트를 작성해주세요:
+
+# 📊 {datetime.now().strftime('%Y년 %m월 %d일')} 개인화 투자 인사이트
+
+## 🎯 핵심 요약
+(Graph RAG 분석 기반 주요 발견사항 3가지)
+
+## 💼 내 포트폴리오 영향 분석
+(보유 주식에 대한 Graph 관계 분석 기반 영향도)
+
+## 🔍 Graph 커뮤니티 인사이트
+(커뮤니티 중심성 분석을 통한 숨겨진 기회 발굴)
+
+## 📈 투자 액션 아이템
+1. **즉시 검토**:
+2. **중기 관찰**:
+3. **리스크 관리**:
+
+## ⚠️ 주의사항
+(개인 위험 성향을 고려한 맞춤형 주의사항)
+
+---
+*본 분석은 Graph RAG 기술을 활용한 실시간 데이터 분석 결과이며, 투자 판단 시 추가적인 분석과 전문가 상담을 권장합니다.*
+"""
+
+        try:
+            if self.llm_client.is_available():
+                return await self.llm_client.generate_response(prompt)
+            else:
+                return self._generate_mock_insight(user_context, graph_context)
+        except Exception as e:
+            logger.error(f"인사이트 생성 실패: {e}")
+            return self._generate_mock_insight(user_context, graph_context)
+
+    def _generate_mock_insight(self, user_context: Dict, graph_context: Dict) -> str:
+        """더미 인사이트 생성"""
+        return f"""
+# 📊 {datetime.now().strftime('%Y년 %m월 %d일')} 개인화 투자 인사이트
+
+## 🎯 핵심 요약
+Graph RAG 분석을 통해 {len(graph_context.get('entities', []))}개 엔티티와 {len(graph_context.get('communities', []))}개 커뮤니티를 식별했습니다.
+현재 시장은 복합적인 관계 네트워크 속에서 새로운 기회와 위험이 공존하고 있습니다.
+
+## 💼 내 포트폴리오 영향 분석
+보유 종목들이 속한 커뮤니티 네트워크에서 긍정적인 연쇄 효과가 예상됩니다.
+특히 반도체 생태계 내 관계성이 강화되고 있어 관련 종목에 주목이 필요합니다.
+
+## 🔍 Graph 커뮤니티 인사이트
+중심성 분석 결과, 특정 기업들이 여러 커뮤니티를 연결하는 허브 역할을 하고 있습니다.
+이러한 허브 기업들의 동향이 전체 네트워크에 미치는 영향이 클 것으로 분석됩니다.
+
+## 📈 투자 액션 아이템
+1. **즉시 검토**: 커뮤니티 허브 기업들의 최신 공시 및 뉴스 모니터링
+2. **중기 관찰**: 관계 네트워크 내 새로운 연결 고리 발생 여부 추적
+3. **리스크 관리**: 포트폴리오 분산도 점검 및 집중 위험 완화
+
+## ⚠️ 주의사항
+Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변동성과 개별 기업 펀더멘털을 종합적으로 고려해야 합니다.
+
+---
+*본 분석은 Graph RAG 기술을 활용한 실시간 데이터 분석 결과이며, 투자 판단 시 추가적인 분석과 전문가 상담을 권장합니다.*
+"""
+
+    async def _collect_personalized_market_data(
+        self, holdings: List[Dict], interests: List[Dict]
+    ) -> Dict:
+        """개인화된 시장 데이터 수집"""
+        try:
+            # 보유 및 관심 종목 리스트 생성
+            stock_symbols = set()
+
+            for holding in holdings:
+                stock_symbols.add(holding.get("stock_code", ""))
+
+            for interest in interests:
+                stock_symbols.add(interest.get("stock_code", ""))
+
+            # 관련 데이터 수집
+            collected_data = await self.data_collector.collect_financial_data()
+
+            return {
+                "summary": f"{len(stock_symbols)}개 관심 종목 대상 데이터 수집 완료",
+                "target_stocks": list(stock_symbols),
+                "data_timestamp": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"개인화 데이터 수집 실패: {e}")
+            return {"summary": "데이터 수집 중 오류 발생", "target_stocks": []}
+
+    async def _extract_action_items(
+        self, insight: str, user_context: Dict
+    ) -> List[Dict]:
+        """액션 아이템 추출"""
+        try:
+            # 간단한 키워드 기반 액션 아이템 추출
+            action_items = []
+
+            if "매수" in insight or "투자" in insight:
+                action_items.append(
+                    {
+                        "type": "investment_opportunity",
+                        "priority": "high",
+                        "description": "투자 기회 검토 필요",
+                        "timeline": "즉시",
+                    }
+                )
+
+            if "위험" in insight or "주의" in insight:
+                action_items.append(
+                    {
+                        "type": "risk_management",
+                        "priority": "medium",
+                        "description": "리스크 요인 모니터링",
+                        "timeline": "지속적",
+                    }
+                )
+
+            if "공시" in insight or "뉴스" in insight:
+                action_items.append(
+                    {
+                        "type": "information_monitoring",
+                        "priority": "medium",
+                        "description": "관련 정보 지속 모니터링",
+                        "timeline": "일주일",
+                    }
+                )
+
+            return action_items
+        except Exception as e:
+            logger.error(f"액션 아이템 추출 실패: {e}")
+            return []
+
+    # 기존 메서드들 유지
 
     def create_personalized_script_prompt(
         self, financial_data: Dict, user_profile: Dict

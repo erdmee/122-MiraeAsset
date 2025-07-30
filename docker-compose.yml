@@ -14,10 +14,14 @@ services:
     environment:
       - DISPLAY=:99
       - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
     # 더 많은 메모리와 shared memory 할당 (Playwright용)
     shm_size: 2gb
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
     restart: unless-stopped
+    depends_on:
+      - elasticsearch
 
   frontend:
     build:
@@ -32,3 +36,85 @@ services:
     working_dir: /app
     command: npm start
     restart: unless-stopped
+
+  # Elasticsearch 클러스터
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: elasticsearch
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=es-docker-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Kibana (선택사항 - 데이터 시각화용)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Neo4j는 그대로 유지
+  neo4j:
+    image: neo4j:5.19.0-community
+    container_name: neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/122miraeasset
+    volumes:
+      - neo4j-data:/data
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    restart: unless-stopped
+
+  # DART 파이프라인 서비스 (필요시 실행)
+  dart-pipeline:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    working_dir: /app
+    environment:
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+    command: python -m app.pipelines.dart_to_elastic
+    depends_on:
+      - elasticsearch
+      - backend
+    profiles:
+      - pipeline
+
+volumes:
+  elasticsearch-data:
+  neo4j-data:

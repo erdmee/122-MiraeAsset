@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
-from app.api.routes import financial_data, insights, users
+from app.api.routes import financial_data, insights, users, chat_router
 from .config import settings
 
 
@@ -40,11 +40,13 @@ app.add_middleware(
 )
 
 # 라우터 등록
+
 app.include_router(
     financial_data.router, prefix="/api/financial-data", tags=["Financial Data"]
 )
 app.include_router(insights.router, prefix="/api/insights", tags=["Insights"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
 
 
 @app.get("/")

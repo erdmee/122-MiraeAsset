@@ -7,17 +7,19 @@ import os
 import logging
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
-from app.services.personalized_insight_generator import PersonalizedInsightGenerator
-from app.services.simple_graph_rag import SimpleGraphRAG
-from app.services.enhanced_data_collector import EnhancedDataCollector
-from app.services.aistudios_service import VideoGenerationService
+from app.services.core.personalized_insight_generator import (
+    PersonalizedInsightGenerator,
+)
+from app.services.core.enhanced_graph_rag import EnhancedGraphRAG
+from app.services.storage.enhanced_data_collector import EnhancedDataCollector
+from app.services.external.aistudios_service import VideoGenerationService
 
 # 로거 설정
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 insight_generator = PersonalizedInsightGenerator()
-graph_rag = SimpleGraphRAG()
+enhanced_graph_rag = EnhancedGraphRAG()
 data_collector = EnhancedDataCollector()
 
 # 환경변수로 비디오 제공자 선택 (기본값: heygen)
@@ -464,7 +466,7 @@ async def get_video_providers() -> Dict[str, Any]:
 
     try:
         # HeyGen 서비스 체크 (import 경로 수정)
-        from app.services.heygen_service import HeyGenService
+        from app.services.external.heygen_service import HeyGenService
 
         heygen_service = HeyGenService()
         heygen_available = heygen_service.is_available()
@@ -708,7 +710,9 @@ async def get_graph_rag_analysis(
         logger.info(f"Graph RAG 시장 분석 시작: user_id={user_id}")
 
         financial_data = data_collector.collect_all_data(user_id=user_id)
-        market_narrative = graph_rag.create_market_narrative(financial_data)
+        market_narrative = await enhanced_graph_rag.get_real_time_graph_context(
+            f"시장 전반 분석 및 투자 인사이트"
+        )
 
         logger.info(f"Graph RAG 시장 분석 완료: user_id={user_id}")
 
@@ -821,14 +825,16 @@ async def test_insight_generation() -> Dict[str, Any]:
             "personalized": {"portfolio": [], "preferences": {}},
         }
 
-        narrative = graph_rag.create_market_narrative(test_data)
+        narrative = await enhanced_graph_rag.get_real_time_graph_context(
+            "테스트 시장 분석"
+        )
 
         logger.info("인사이트 생성 기능 테스트 완료")
 
         return {
             "status": "success",
             "message": "인사이트 생성 테스트 완료",
-            "graph_rag_result": narrative["market_summary"] if narrative else None,
+            "graph_rag_result": narrative.get("analysis", "") if narrative else None,
         }
 
     except Exception as e:

@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict
 from pydantic import BaseModel
-from app.services.personalized_insight_generator import PersonalizedInsightGenerator
+from app.services.core.personalized_insight_generator import PersonalizedInsightGenerator
 
 router = APIRouter()
 insight_generator = PersonalizedInsightGenerator()
@@ -61,7 +61,7 @@ async def save_user_preferences(user_id: str, preferences: UserPreferences):
 async def get_user_profile(user_id: str):
     """사용자 프로필 조회 (포트폴리오 + 선호도)"""
     try:
-        from app.services.enhanced_data_collector import EnhancedDataCollector
+        from app.services.storage.enhanced_data_collector import EnhancedDataCollector
 
         data_collector = EnhancedDataCollector()
 

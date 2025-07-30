@@ -1,7 +1,7 @@
 # app/api/routes/financial_data.py
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
-from app.services.enhanced_data_collector import EnhancedDataCollector
+from app.services.storage.enhanced_data_collector import EnhancedDataCollector
 from app.models.responses import NewsItem, DisclosureItem
 from app.models.user_models import StockPrice
 

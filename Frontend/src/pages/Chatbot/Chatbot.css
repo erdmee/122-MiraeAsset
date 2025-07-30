@@ -341,54 +341,54 @@
   .chatbot {
     height: calc(100vh - 70px);
   }
-  
+
   .chatbot-container {
     padding: 0 10px;
   }
-  
+
   .chatbot-header {
     padding: 20px 10px 15px;
     margin: 0 -10px 0;
   }
-  
+
   .chatbot-title {
     font-size: 24px;
   }
-  
+
   .chatbot-subtitle {
     font-size: 14px;
   }
-  
+
   .messages-container {
     margin: 0 -10px;
   }
-  
+
   .messages-list {
     padding: 15px;
     gap: 15px;
   }
-  
+
   .message {
     max-width: 90%;
   }
-  
+
   .message-content {
     padding: 12px 16px;
   }
-  
+
   .message-text {
     font-size: 15px;
   }
-  
+
   .input-container {
     padding: 15px 10px;
     margin: 0 -10px;
   }
-  
+
   .file-preview-container {
     margin-bottom: 10px;
   }
-  
+
   .file-preview {
     padding: 8px 12px;
     font-size: 13px;
@@ -400,15 +400,150 @@
     font-size: 14px;
     padding: 8px 12px;
   }
-  
+
   .input-controls {
     padding: 6px;
   }
-  
+
   .file-upload-btn,
   .send-btn {
     width: 36px;
     height: 36px;
     font-size: 18px;
+  }
+}
+
+/* 기존 CSS에 추가할 마크다운 스타일 */
+
+/* 마크다운 공통 스타일 */
+.message-text .markdown-p {
+  margin: 0.5em 0;
+  line-height: 1.6;
+}
+
+.message-text .markdown-h1 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 1em 0 0.5em 0;
+  color: #2c3e50;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 0.3em;
+}
+
+.message-text .markdown-h2 {
+  font-size: 1.3em;
+  font-weight: bold;
+  margin: 0.8em 0 0.4em 0;
+  color: #34495e;
+  border-bottom: 1px solid #bdc3c7;
+  padding-bottom: 0.2em;
+}
+
+.message-text .markdown-h3 {
+  font-size: 1.1em;
+  font-weight: bold;
+  margin: 0.6em 0 0.3em 0;
+  color: #34495e;
+}
+
+.message-text .markdown-strong {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.message-text .markdown-em {
+  font-style: italic;
+  color: #7f8c8d;
+}
+
+/* 리스트 스타일 */
+.message-text .markdown-ul,
+.message-text .markdown-ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.message-text .markdown-li {
+  margin: 0.3em 0;
+  line-height: 1.4;
+}
+
+/* 인라인 코드 스타일 */
+.message-text .inline-code {
+  background-color: #f8f9fa;
+  color: #e83e8c;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9em;
+  border: 1px solid #e9ecef;
+}
+
+/* 코드 블록 스타일 */
+.message-text pre {
+  background-color: #2d3748;
+  border-radius: 6px;
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
+.message-text pre code {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+/* 테이블 스타일 */
+.message-text .markdown-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+
+.message-text .markdown-th,
+.message-text .markdown-td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.message-text .markdown-th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.message-text .markdown-td {
+  background-color: #fff;
+}
+
+.message-text .markdown-table tr:nth-child(even) .markdown-td {
+  background-color: #f9f9f9;
+}
+
+/* 인용구 스타일 */
+.message-text .markdown-blockquote {
+  border-left: 4px solid #3498db;
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  background-color: #f8f9fa;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.message-text .markdown-blockquote p {
+  margin: 0;
+}
+
+/* 반응형 테이블 */
+@media (max-width: 768px) {
+  .message-text .markdown-table {
+    font-size: 0.8em;
+  }
+
+  .message-text .markdown-th,
+  .message-text .markdown-td {
+    padding: 6px 8px;
   }
 }
