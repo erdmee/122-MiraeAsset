@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useUser } from '../../context/UserContext';
+import NaturalLanguageProfileSetup from '../../components/NaturalLanguageProfileSetup/NaturalLanguageProfileSetup';
 import './DailyInsights.css';
 
 const DailyInsights = () => {
+  const { user, isLoggedIn, isLoading } = useUser();
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
+  
   // 전체 인사이트 목록 상태 (기존 + 새로 생성)
   const [insights, setInsights] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -35,17 +40,58 @@ const DailyInsights = () => {
     }));
   }, []);
 
+  // 로그인 상태 확인 및 프로필 설정 완료 처리
+  useEffect(() => {
+    if (!isLoading && !isLoggedIn) {
+      setShowProfileSetup(true);
+    }
+  }, [isLoggedIn, isLoading]);
+
+  const handleProfileSetupComplete = (userProfile) => {
+    console.log('프로필 설정 완료:', userProfile);
+    console.log('현재 UserContext user:', user);
+    
+    setShowProfileSetup(false);
+    // 프로필 설정 완료 후 인사이트 생성 시작
+    setTimeout(() => {
+      console.log('타이머 후 UserContext user:', user);
+      generateNewInsight();
+    }, 2000); // 1초에서 2초로 늘려서 컨텍스트 업데이트 시간 확보
+  };
+
   // 새로운 인사이트 생성 (기존 인사이트는 유지)
   const generateNewInsight = async () => {
-    console.log('새 인사이트 생성 시작');
+    console.log('generateNewInsight 호출됨 - user 객체:', user);
+    console.log('generateNewInsight 호출됨 - isLoggedIn:', isLoggedIn);
+    
+    // UserContext의 user가 없으면 localStorage에서 직접 읽기
+    let currentUser = user;
+    if (!currentUser || !currentUser.user_id) {
+      const savedUser = localStorage.getItem('userProfile');
+      if (savedUser) {
+        try {
+          currentUser = JSON.parse(savedUser);
+          console.log('localStorage에서 사용자 정보 복원:', currentUser);
+        } catch (error) {
+          console.error('localStorage 파싱 실패:', error);
+        }
+      }
+    }
+    
+    if (!currentUser || !currentUser.user_id) {
+      console.error('사용자 정보가 없습니다. user:', currentUser);
+      return;
+    }
+
+    console.log(`사용자 ${currentUser.user_id}의 새 인사이트 생성 시작`);
 
     setIsGenerating(true);
     setError(null);
     setProgress({ status: 'starting', progress: 10, message: '새로운 인사이트 생성 중...' });
 
     try {
-      // 1. 인사이트 생성 + 영상 생성 요청
-      const response = await fetch(`${API_BASE_URL}/api/insights/generate-video/current_user?refresh_data=true`, {
+      // 1. 인사이트 생성 + 영상 생성 요청 (사용자 ID 포함)
+      const response = await fetch(`${API_BASE_URL}/api/insights/generate-video/${currentUser.user_id}?refresh_data=true`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -343,7 +389,22 @@ const DailyInsights = () => {
 
   return (
     <div className="daily-insights">
-      <div className="insights-container">
+      {/* 사용자 프로필 설정 모달 */}
+      {showProfileSetup && (
+        <NaturalLanguageProfileSetup onComplete={handleProfileSetupComplete} />
+      )}
+
+      {/* 로딩 상태 */}
+      {isLoading && (
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>사용자 정보를 불러오는 중...</p>
+        </div>
+      )}
+
+      {/* 로그인된 사용자만 접근 가능 */}
+      {!isLoading && isLoggedIn && (
+        <div className="insights-container">
         {/* 헤더 */}
         <div className="insights-header">
           <h1 className="page-title">데일리 인사이트</h1>
@@ -412,7 +473,8 @@ const DailyInsights = () => {
             <div>확장된 카드: {Object.keys(expandedStates).filter(id => expandedStates[id]).length}개</div>
           </div>
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -3,9 +3,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { tomorrow } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useUser } from '../../context/UserContext';
+import NaturalLanguageProfileSetup from '../../components/NaturalLanguageProfileSetup/NaturalLanguageProfileSetup';
 import "./Chatbot.css";
 
 const Chatbot = () => {
+  const { user, isLoggedIn, isLoading } = useUser();
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -25,6 +29,26 @@ const Chatbot = () => {
     scrollToBottom();
   }, [messages, isTyping]);
 
+  // 로그인 상태 확인
+  useEffect(() => {
+    if (!isLoading && !isLoggedIn) {
+      setShowProfileSetup(true);
+    }
+  }, [isLoggedIn, isLoading]);
+
+  const handleProfileSetupComplete = (userProfile) => {
+    setShowProfileSetup(false);
+    // 프로필 설정 완료 후 환영 메시지 업데이트
+    setMessages(prev => [
+      {
+        id: 1,
+        type: "bot",
+        content: `안녕하세요 ${userProfile.name}님! 저는 AI 금융 어시스턴트입니다. 귀하의 투자 프로필을 바탕으로 개인화된 투자 조언과 시장 분석을 제공해드릴 수 있습니다. 오늘 어떻게 도와드릴까요?`,
+        timestamp: new Date(),
+      }
+    ]);
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -34,7 +58,20 @@ const Chatbot = () => {
       let fullContent = "";
       let isComplete = false;
       let botMsgId = Date.now() + 1;
-      const params = new URLSearchParams({ query: message });
+      
+      // 사용자 정보를 쿼리 파라미터에 포함
+      const params = new URLSearchParams({ 
+        query: message,
+        user_id: user?.user_id || 'anonymous',
+        user_name: user?.name || '',
+        user_context: JSON.stringify({
+          investment_experience: user?.investment_experience || '',
+          risk_tolerance: user?.risk_tolerance || '',
+          preferred_sectors: user?.preferred_sectors || [],
+          portfolio_count: user?.portfolio?.length || 0
+        })
+      });
+      
       const eventSource = new window.EventSource(
         `http://localhost:8001/api/chat/stream?${params.toString()}`
       );
@@ -257,7 +294,22 @@ const Chatbot = () => {
 
   return (
     <div className="chatbot">
-      <div className="chatbot-container">
+      {/* 사용자 프로필 설정 모달 */}
+      {showProfileSetup && (
+        <NaturalLanguageProfileSetup onComplete={handleProfileSetupComplete} />
+      )}
+
+      {/* 로딩 상태 */}
+      {isLoading && (
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>사용자 정보를 불러오는 중...</p>
+        </div>
+      )}
+
+      {/* 로그인된 사용자만 접근 가능 */}
+      {!isLoading && isLoggedIn && (
+        <div className="chatbot-container">
         <div className="chatbot-header">
           <h1 className="chatbot-title">AI 챗봇 어시스턴트</h1>
           <p className="chatbot-subtitle">
@@ -380,7 +432,8 @@ const Chatbot = () => {
             </button>
           </div>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 };

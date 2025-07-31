@@ -1,0 +1,367 @@
+.natural-profile-setup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.setup-container {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.setup-header h2 {
+  color: #1a202c;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.step-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.step-indicator span {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.step-indicator span.active {
+  background: #ff6b35; /* 미래에셋 오렌지 */
+  color: white;
+}
+
+/* 대화 컨테이너 */
+.conversation-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  background: #f9fafb;
+}
+
+.message {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.message.assistant {
+  align-items: flex-start;
+}
+
+.message.user {
+  align-items: flex-end;
+}
+
+.message-content {
+  max-width: 80%;
+  padding: 1rem;
+  border-radius: 12px;
+  word-wrap: break-word;
+}
+
+.message.assistant .message-content {
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+}
+
+.message.user .message-content {
+  background: #ff6b35; /* 미래에셋 오렌지 */
+  color: white;
+}
+
+.message-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+  padding: 0 0.5rem;
+}
+
+/* 정보 요약 */
+.info-summary {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  border-left: 4px solid #ff6b35;
+}
+
+.info-summary h4 {
+  margin: 0 0 0.5rem 0;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.info-item {
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.info-item strong {
+  color: #1f2937;
+  margin-right: 0.5rem;
+}
+
+/* 타이핑 인디케이터 */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 0.5rem 0;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff6b35;
+  animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+/* 입력 영역 */
+.input-container {
+  margin-top: auto;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.required-fields {
+  color: #059669;
+  font-weight: 500;
+}
+
+.missing-fields {
+  color: #dc2626;
+  font-size: 0.8rem;
+}
+
+.input-area {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.input-area textarea {
+  flex: 1;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: none;
+  transition: border-color 0.3s ease;
+}
+
+.input-area textarea:focus {
+  outline: none;
+  border-color: #ff6b35;
+}
+
+.input-area textarea:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+}
+
+.send-button {
+  padding: 1rem 1.5rem;
+  background: #ff6b35;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.send-button:hover:not(:disabled) {
+  background: #e55a30;
+  transform: translateY(-1px);
+}
+
+.send-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 확인 단계 */
+.confirmation-step {
+  text-align: center;
+}
+
+.confirmation-step h3 {
+  color: #1a202c;
+  margin-bottom: 1.5rem;
+}
+
+.final-summary {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.summary-item:last-child {
+  border-bottom: none;
+}
+
+.summary-item label {
+  font-weight: 600;
+  color: #374151;
+  min-width: 120px;
+}
+
+.summary-item span {
+  color: #4b5563;
+  text-align: right;
+  flex: 1;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.btn-back,
+.btn-confirm {
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-back {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.btn-back:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.btn-confirm {
+  background: #ff6b35;
+  color: white;
+}
+
+.btn-confirm:hover:not(:disabled) {
+  background: #e55a30;
+}
+
+.btn-back:disabled,
+.btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .setup-container {
+    width: 95%;
+    padding: 1.5rem;
+    max-height: 95vh;
+  }
+
+  .message-content {
+    max-width: 90%;
+  }
+
+  .input-area {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .send-button {
+    align-self: flex-end;
+    padding: 0.75rem 1.25rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .progress-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}

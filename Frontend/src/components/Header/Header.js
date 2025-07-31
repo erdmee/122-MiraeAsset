@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useUser } from '../../context/UserContext';
 import './Header.css';
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { user, clearUser, isLoggedIn } = useUser();
+
+  // 디버깅: 사용자 정보 로그
+  console.log('Header - 현재 사용자 정보:', user);
+  console.log('Header - 로그인 상태:', isLoggedIn);
+  console.log('Header - localStorage userProfile:', localStorage.getItem('userProfile'));
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -49,6 +56,26 @@ const Header = () => {
           </Link>
         </nav>
 
+        {/* User Profile Section */}
+        <div className="header-user">
+          {isLoggedIn ? (
+            <div className="user-info">
+              <span className="user-name">안녕하세요, {user?.name || '사용자'}님</span>
+              <button 
+                onClick={clearUser} 
+                className="logout-btn"
+                title="로그아웃"
+              >
+                로그아웃
+              </button>
+            </div>
+          ) : (
+            <div className="login-prompt">
+              <span>로그인이 필요합니다</span>
+            </div>
+          )}
+        </div>
+
         {/* Mobile Menu Button */}
         <button 
           className="mobile-menu-btn"
@@ -85,6 +112,16 @@ const Header = () => {
           >
             AI 챗봇 어시스턴트
           </Link>
+          
+          {/* Mobile User Info */}
+          {isLoggedIn && (
+            <div className="mobile-user-info">
+              <span className="user-name">{user?.name || '사용자'}님</span>
+              <button onClick={clearUser} className="logout-btn">
+                로그아웃
+              </button>
+            </div>
+          )}
         </nav>
       </div>
     </header>

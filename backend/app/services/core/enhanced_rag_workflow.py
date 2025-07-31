@@ -156,27 +156,52 @@ class EnhancedRAGWorkflow:
     async def user_context_loader_node(
         self, state: EnhancedWorkflowState
     ) -> EnhancedWorkflowState:
-        """사용자 컨텍스트 로딩 노드"""
+        """사용자 컨텍스트 로딩 노드 (RDB 프로필 통합)"""
         try:
-            # 사용자 메모리에서 컨텍스트 로드
-            user_context = await self.user_memory.get_user_context(
+            # 1. 기존 사용자 메모리에서 컨텍스트 로드
+            memory_context = await self.user_memory.get_user_context(
                 state["user_id"], state["session_id"]
             )
-            state["user_context"] = user_context
+            
+            # 2. 프론트엔드에서 전달받은 사용자 컨텍스트 사용
+            frontend_context = state.get("user_context", {})
+            
+            # 3. RDB에서 사용자 프로필 가져오기 (PersonalizedInsightGenerator 활용)
+            from app.services.core.personalized_insight_generator import PersonalizedInsightGenerator
+            insight_generator = PersonalizedInsightGenerator()
+            rdb_profile = insight_generator.get_user_profile_from_db(state["user_id"])
+            
+            # 4. 통합된 사용자 컨텍스트 생성
+            integrated_context = {
+                **memory_context,  # 기존 메모리 시스템 데이터
+                **frontend_context,  # 프론트엔드에서 전달받은 실시간 데이터
+                "rdb_profile": rdb_profile,  # RDB 저장된 프로필 데이터
+                "user_name": frontend_context.get("user_name", ""),
+                "investment_experience": frontend_context.get("investment_experience", ""),
+                "risk_tolerance": frontend_context.get("risk_tolerance", ""),
+                "preferred_sectors": frontend_context.get("preferred_sectors", []),
+                "portfolio_count": frontend_context.get("portfolio_count", 0),
+                "is_personalized": bool(rdb_profile.get("portfolio", [])),  # 포트폴리오 있으면 개인화됨
+            }
+            
+            state["user_context"] = integrated_context
 
-            # 최근 인사이트 검색
+            # 5. 최근 인사이트 검색
             recent_insights = await self.insight_storage.search_insights(
                 query=state["query"], user_id=state["user_id"], limit=3
             )
             state["user_context"]["recent_insights"] = recent_insights
 
             logger.info(
-                f"사용자 컨텍스트 로딩 완료: {user_context.get('context_summary', 'N/A')}"
+                f"사용자 컨텍스트 로딩 완료 - 사용자: {frontend_context.get('user_name', 'Unknown')}, "
+                f"경험: {frontend_context.get('investment_experience', 'N/A')}, "
+                f"포트폴리오: {frontend_context.get('portfolio_count', 0)}개"
             )
 
         except Exception as e:
             logger.error(f"사용자 컨텍스트 로딩 실패: {e}")
-            state["user_context"] = {}
+            # 최소한 프론트엔드 컨텍스트라도 사용
+            state["user_context"] = state.get("user_context", {})
 
         return state
 
@@ -420,7 +445,7 @@ class EnhancedRAGWorkflow:
         """채팅 인터페이스"""
         return await self.aprocess(query, user_id)
 
-    async def chat_with_progress(self, query: str, user_id: str = "default"):
+    async def chat_with_progress(self, query: str, user_id: str = "default", user_context: Dict = None):
         """진행 상황을 스트리밍하는 채팅 인터페이스"""
         # 세션 ID 생성
         session_id = (
@@ -432,7 +457,7 @@ class EnhancedRAGWorkflow:
             "query": query,
             "user_id": user_id,
             "session_id": session_id,
-            "user_context": {},
+            "user_context": user_context or {},
             "is_simple": False,
             "plan": [],
             "retrieved_data": {},

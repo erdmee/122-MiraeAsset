@@ -302,6 +302,89 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
 
     # 기존 메서드들 유지
 
+    def get_user_profile_from_db(self, user_id: str) -> Dict:
+        """RDB에서 사용자 프로필 정보 가져오기"""
+        try:
+            conn = sqlite3.connect(self.data_collector.db_path)
+            cursor = conn.cursor()
+            
+            # 사용자 프로필 조회
+            cursor.execute('''
+                SELECT investment_experience, risk_tolerance, investment_goals,
+                       investment_style, preferred_sectors, investment_amount_range, news_keywords
+                FROM user_profiles WHERE user_id = ?
+            ''', (user_id,))
+            
+            profile_data = cursor.fetchone()
+            
+            if not profile_data:
+                logger.warning(f"사용자 {user_id}의 프로필이 없음. 기본값 사용")
+                return self.get_default_user_profile()
+            
+            # 포트폴리오 조회
+            cursor.execute('''
+                SELECT symbol, company_name, shares, avg_price, sector
+                FROM user_portfolios WHERE user_id = ?
+                ORDER BY company_name
+            ''', (user_id,))
+            
+            portfolio_data = cursor.fetchall()
+            conn.close()
+            
+            # JSON 문자열 파싱
+            import json
+            investment_goals = json.loads(profile_data[2]) if profile_data[2] else []
+            preferred_sectors = json.loads(profile_data[4]) if profile_data[4] else []
+            news_keywords = json.loads(profile_data[6]) if profile_data[6] else []
+            
+            # 포트폴리오 변환
+            portfolio = []
+            for holding in portfolio_data:
+                portfolio.append([
+                    holding[0],  # symbol
+                    holding[1],  # company_name
+                    holding[2],  # shares
+                    holding[3]   # avg_price
+                ])
+            
+            return {
+                "preferences": {
+                    "preferred_sectors": ','.join(preferred_sectors),
+                    "investment_style": profile_data[3],
+                    "risk_level": profile_data[1],
+                    "news_keywords": ','.join(news_keywords)
+                },
+                "portfolio": portfolio,
+                "user_profile": {
+                    "investment_experience": profile_data[0],
+                    "risk_tolerance": profile_data[1],
+                    "investment_goals": investment_goals,
+                    "investment_amount_range": profile_data[5]
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"사용자 프로필 조회 실패: {e}")
+            return self.get_default_user_profile()
+    
+    def get_default_user_profile(self) -> Dict:
+        """기본 사용자 프로필 반환"""
+        return {
+            "preferences": {
+                "preferred_sectors": "IT/기술,바이오/제약",
+                "investment_style": "균형투자",
+                "risk_level": "위험중립형",
+                "news_keywords": ""
+            },
+            "portfolio": [],
+            "user_profile": {
+                "investment_experience": "중급자",
+                "risk_tolerance": "위험중립형",
+                "investment_goals": ["장기성장", "자산보전"],
+                "investment_amount_range": "1천-5천만원"
+            }
+        }
+
     def create_personalized_script_prompt(
         self, financial_data: Dict, user_profile: Dict
     ) -> str:
@@ -309,6 +392,7 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
         graph_context = self.graph_rag.generate_insight_context(financial_data)
         portfolio = user_profile.get("portfolio", [])
         preferences = user_profile.get("preferences", {})
+        user_info = user_profile.get("user_profile", {})
 
         # 포트폴리오 정보
         portfolio_info = ""
@@ -320,6 +404,15 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
                     f"- {stock[1]}({stock[0]}): {stock[2]}주 (평균 {stock[3]:,}원)\n"
                 )
                 portfolio_symbols.add(stock[0])
+
+        # 사용자 투자 정보 추가
+        investment_profile = ""
+        if user_info.get('investment_experience'):
+            investment_profile += f"투자 경험: {user_info['investment_experience']}\n"
+        if user_info.get('investment_amount_range'):
+            investment_profile += f"투자 규모: {user_info['investment_amount_range']}\n"
+        if user_info.get('investment_goals'):
+            investment_profile += f"투자 목표: {', '.join(user_info['investment_goals'])}\n"
 
         # 사용자 맞춤 공시 정보 분석
         disclosure_analysis = self._analyze_disclosure_for_portfolio(
@@ -367,7 +460,8 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
 === 시장 분석 정보 (Graph RAG) ===
 {graph_context}
 
-=== 투자자 프로필 ===
+=== 투자자 상세 프로필 ===
+{investment_profile}
 {portfolio_info}
 {sector_info}
 투자 스타일: {investment_style}
@@ -392,6 +486,11 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
 3. **시장 기회**: 놓치기 쉬운 투자 기회나 주의점 제시 (45초 분량)
 4. **액션 아이템**: 구체적이고 실행 가능한 투자 조치 제안 (30초 분량)
 5. **마무리**: 다음 모니터링 포인트 안내 (15초 분량)
+
+**개인화 요소:**
+- 투자자의 경험 수준({user_info.get('investment_experience', '중급자')})에 맞는 설명 깊이 조절
+- 위험 성향({risk_level})을 고려한 투자 제안
+- 투자 목표({', '.join(user_info.get('investment_goals', []))})에 부합하는 전략 제시
 
 **반드시 포함해야 할 요소:**
 - 구체적인 수치와 데이터 (주가, 수익률, 거래량 등)
@@ -533,7 +632,8 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
     ) -> Optional[Dict]:
         """개인화된 인사이트 생성 (HyperCLOVA X 사용)"""
         print(f">> 사용자 {user_id}를 위한 고급 인사이트 생성 시작")
-        user_profile = self.data_collector.get_personalized_data(user_id)
+        # RDB에서 사용자 프로필 가져오기
+        user_profile = self.get_user_profile_from_db(user_id)
 
         if not self.llm_client.is_available():
             print(">> 사용 가능한 LLM API가 없음. Mock 인사이트로 대체합니다")
@@ -581,7 +681,7 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
             return {
                 "script": script_content,
                 "user_id": user_id,
-                "analysis_method": f"실제 {provider} API + Graph RAG + DART Disclosures",
+                "analysis_method": f"실제 {provider} API + Graph RAG + DART Disclosures + RDB Profile",
                 "portfolio_analysis": self._analyze_portfolio_performance(
                     user_profile, financial_data
                 ),
@@ -602,6 +702,7 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
                     "disclosure_count": len(financial_data.get("disclosures", [])),
                     "stock_count": len(financial_data.get("stock_data", [])),
                 },
+                "user_profile_source": "RDB"
             }
         except Exception as e:
             print(f">> 고급 인사이트 생성 실패: {e}, Mock 인사이트로 대체합니다")
@@ -609,7 +710,7 @@ Graph RAG 분석은 관계성 기반 인사이트를 제공하지만, 시장 변
                 financial_data, user_profile
             )
             result["analysis_method"] = (
-                f"Mock 데이터 (예외 발생: {str(e)[:50]}) + Graph RAG + DART"
+                f"Mock 데이터 (예외 발생: {str(e)[:50]}) + Graph RAG + DART + RDB Profile"
             )
             result["model_used"] = "Mock (예외 발생으로 인한 대체)"
             return result
