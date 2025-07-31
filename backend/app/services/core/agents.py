@@ -4,6 +4,9 @@ import asyncio
 from datetime import datetime
 from typing import List, Dict, Any
 
+# HyperClovaXClient import 추가
+from app.services.external.hyperclova_client import HyperClovaXClient
+
 # 새로운 통합 도구들 import
 try:
     from app.services.core.elasticsearch_tool import (
@@ -1218,7 +1221,7 @@ class RetrieverAgent:
 # CriticAgent1
 class CriticAgent1:
     def __init__(self, llm=None):
-        self.llm = llm or ClovaXLLM()
+        self.llm = llm or HyperClovaXClient()
 
     async def evaluate(
         self, retrieved_results: Dict[str, Any], original_query: str
@@ -1490,74 +1493,108 @@ class ContextIntegratorAgent:
 # ReportGeneratorAgent
 class ReportGeneratorAgent:
     def __init__(self, llm=None):
-        self.llm = llm or ClovaXLLM()
+        self.llm = llm or HyperClovaXClient()
 
     def generate(self, context: str, user_context: Dict = None) -> str:
-        print(f"Generating report")
-        current_time = datetime.now().strftime("%Y년 %m월 %d일 %H:%M")
+        print(f"Generating report with user context")
+        
+        # 정확한 현재 시간 정보 (한국 시간대)
+        from datetime import datetime, timezone, timedelta
+        kst = timezone(timedelta(hours=9))
+        current_time = datetime.now(kst)
+        current_time_str = current_time.strftime("%Y년 %m월 %d일 %H시 %M분")
+        current_date_str = current_time.strftime("%Y년 %m월 %d일")
+        current_weekday = current_time.strftime("%A")
+        weekday_korean = {
+            "Monday": "월요일", "Tuesday": "화요일", "Wednesday": "수요일",
+            "Thursday": "목요일", "Friday": "금요일", "Saturday": "토요일", "Sunday": "일요일"
+        }
 
+        # 사용자 컨텍스트 정보 추출 및 개선
         user_info = ""
+        personalization_level = "기본"
+        
         if user_context:
-            user_info = f"""
-**투자자 프로필**:
-- 투자 성향: {user_context.get('risk_tolerance', '정보 없음')}
-- 투자 목표: {user_context.get('investment_goal', '정보 없음')}
-- 투자 경험: {user_context.get('experience_level', '정보 없음')}
-- 관심 분야: {user_context.get('preferred_sectors', '정보 없음')}
+            # RDB 프로필 정보 우선 사용
+            rdb_profile = user_context.get('rdb_profile', {})
+            user_profile = rdb_profile.get('user_profile', {})
+            portfolio = rdb_profile.get('portfolio', [])
+            
+            # 프론트엔드에서 전달받은 실시간 정보도 활용
+            user_name = user_context.get('user_name', '')
+            investment_experience = user_context.get('investment_experience', user_profile.get('investment_experience', ''))
+            risk_tolerance = user_context.get('risk_tolerance', user_profile.get('risk_tolerance', ''))
+            preferred_sectors = user_context.get('preferred_sectors', user_profile.get('investment_goals', []))
+            portfolio_count = len(portfolio)
+            
+            if user_name or investment_experience or portfolio_count > 0:
+                personalization_level = "개인화"
+                user_info = f"""
+**투자자 프로필** ({user_name or '고객'}님):
+- 투자 경험: {investment_experience or '정보 없음'}
+- 위험 허용도: {risk_tolerance or '정보 없음'}
+- 투자 목표: {', '.join(user_profile.get('investment_goals', [])) or '정보 없음'}
+- 관심 섹터: {', '.join(preferred_sectors) if isinstance(preferred_sectors, list) else preferred_sectors or '정보 없음'}
+- 포트폴리오: {portfolio_count}개 종목 보유
+- 투자 스타일: {user_profile.get('investment_style', '정보 없음')}
 """
 
-        prompt = f"""당신은 경험이 풍부한 투자 분석가이자 리포트 작성 전문가입니다. 수집된 정보를 바탕으로 투자자에게 도움이 되는 전문적인 투자 인사이트를 작성해주세요.
+        prompt = f"""당신은 경험이 풍부한 한국 투자 분석가이자 리포트 작성 전문가입니다. 수집된 정보를 바탕으로 투자자에게 도움이 되는 전문적인 투자 인사이트를 작성해주세요.
 
 **역할**: 시니어 투자 분석가 & 리포트 작성 전문가
 **목표**: 투자자의 의사결정을 돕는 실용적이고 전문적인 인사이트 제공
 **전문 영역**: 기업 분석, 시장 동향, 투자 전략, 리스크 관리
 
-**현재 시각**: {current_time}
+**현재 시각**: {current_time_str} ({weekday_korean.get(current_weekday, current_weekday)})
+**분석 기준일**: {current_date_str}
+**개인화 수준**: {personalization_level}
 {user_info}
 
 **분석 자료**:
 {context}
 
-**리포트 작성 과정**:
-1. **핵심 정보 추출**: 투자 의사결정에 가장 중요한 정보 식별
-2. **트렌드 분석**: 시장 동향과 기업 상황의 연관성 파악
-3. **기회와 위험 평가**: 투자 기회와 리스크 요인 균형적 분석
-4. **실행 가능한 인사이트**: 구체적이고 실용적인 투자 조언 제공
-
-**리포트 구성 원칙**:
-- 투자자가 이해하기 쉬운 명확한 언어 사용
-- 데이터 기반의 객관적 분석
-- 균형잡힌 시각 (기회와 위험 모두 제시)
-- 실행 가능한 구체적 제안
-- 적절한 면책 조항 포함
+**리포트 작성 지침**:
+1. **정확한 시간 정보 사용**: 현재 시각 ({current_time_str})을 기준으로 분석
+2. **개인화 반영**: 투자자의 프로필과 포트폴리오를 고려한 맞춤형 조언
+3. **실시간성 강조**: 최신 정보임을 명확히 표시
+4. **구체적 액션**: 투자자가 바로 실행할 수 있는 구체적 제안
+5. **균형잡힌 시각**: 기회와 위험을 모두 언급
+6. **한국 시장 특성**: 한국 투자자의 관점에서 분석
 
 **응답 형식**: 마크다운 형식의 전문 투자 리포트
+- 명확하고 전문적인 한국어 사용
+- 구조화된 섹션 구성 (## 제목 사용)
+- 핵심 포인트는 **볼드** 처리
+- 리스트와 표 적극 활용
 - 이모지 사용 금지
-- 구조화된 섹션 구성
-- 핵심 포인트 강조 표시
-- 표나 리스트 적극 활용
+
+**중요**: 응답 시 정확한 현재 시각 ({current_time_str})을 반드시 반영하고, 개인화된 투자 조언을 제공하세요.
 
 리포트 작성을 시작하세요:"""
 
         try:
-            return self.llm.chat(prompt)
+            if hasattr(self.llm, 'chat_completion'):
+                # HyperClovaXClient 사용
+                response = self.llm.chat_completion([
+                    {"role": "user", "content": prompt}
+                ], max_tokens=2000, temperature=0.7)
+                return response.get_content() if response else "리포트 생성에 실패했습니다."
+            else:
+                # 기존 방식
+                return self.llm.chat(prompt)
         except Exception as e:
             print(f"인사이트 생성 실패: {e}")
             return f"""# 투자 인사이트 리포트
 
-## 분석 요약
+**생성 시각**: {current_time_str}
+**분석 상태**: 시스템 오류로 인한 제한적 분석
 
-현재 시점({current_time})에서의 분석을 완료했습니다.
+## 시스템 알림
+리포트 생성 중 오류가 발생했습니다: {str(e)}
 
-### 주요 발견사항
-- 시장 상황을 종합적으로 검토했습니다
-- 관련 기업들의 현황을 파악했습니다
-- 투자 기회와 리스크를 평가했습니다
+수집된 정보를 바탕으로 간단한 요약을 제공합니다:
 
-### 투자 제안
-- 신중한 접근을 권장합니다
-- 충분한 정보 수집 후 의사결정하시기 바랍니다
-- 전문가와의 상담을 고려해보세요
+{context[:500]}...
 
-### 면책조항
-본 분석은 참고용이며, 투자에는 원금 손실 위험이 있습니다. 실제 투자 결정 시에는 전문가와 상담하시기 바랍니다."""
+**권장 사항**: 시스템 복구 후 다시 시도하거나 관리자에게 문의하시기 바랍니다."""
+
